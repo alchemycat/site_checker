@@ -2,22 +2,6 @@ const axios = require("axios");
 
 class Check {
 
-    getTitle(response) {
-        return title;
-    }
-
-    checkIsBlocked(response) {
-        return isBlocked;
-    }
-
-    getCode(response) {
-        return code;
-    }
-
-    checkIsRedirect(response) {
-        return isRedirect;
-    }
-
     async checkURL(url) {
         const result = {
             finalURL: null,
@@ -49,11 +33,24 @@ class Check {
         return result;
     }
 
+    async checkSitemap(url) {
+        const response = await axios
+            .get(url)
+            .catch(() => false);
+
+        if (!response) {
+            return false;
+        }
+
+        return true;
+    }
+
     async checkRobots(url) {                        
         return await axios.get(`https://${url}/robots.txt`).then(response => {
             const result = {
                 sitemap: null,
                 host: null,
+                sitemapURL: null
             };
 
             let host = null, sitemap = null;
@@ -62,7 +59,10 @@ class Check {
             /(?<=Sitemap\:\s).*(?=(\n|))/gm.test(response.data) ? sitemap = response.data.match(/(?<=Sitemap\:\s).*(?=(\n|))/gm)[0] : sitemap = false;
 
             if (host && host === `https://${url}`) result.host = true;
-            if (sitemap && sitemap.includes(`https://${url}`)) result.sitemap = true;
+            if (sitemap && sitemap.includes(`https://${url}`)) {
+                result.sitemap = true;
+                result.sitemapURL = sitemap;
+            }
             
             return result;
         }).catch(() => false);
