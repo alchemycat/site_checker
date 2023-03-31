@@ -1,6 +1,5 @@
 const { executablePath } = require("puppeteer");
 const puppeteer = require("puppeteer-extra");
-const fs = require("fs");
 
 const axios = require("axios");
 
@@ -132,7 +131,7 @@ async function main() {
 		sitesResult.push(resultObject);
 	}
 
-	console.log(sitesResult);
+	// console.log(sitesResult);
 
 	const blocked = [];
 	const errorOpen = [];
@@ -140,36 +139,46 @@ async function main() {
 	const sitemap = [];
 	const host = [];
 	const sitemapError = [];
+	const notFound = [];
 
 	sitesResult.find(findSite);
 
 	function findSite(elem) {
-		elem.code = elem.code.toString();
+		try {
+			elem.code = elem.code.toString();
 
-		if (elem.isBlocked) {
-			blocked.push(elem.url);
-		}
+			if (elem.isBlocked) {
+				blocked.push(elem.url);
+			}
 
-		if (elem.code[0] == 4 || elem.code[0] == 5) {
-			errorOpen.push(elem.url);
-		}
+			if (elem.code[0] == 4 || elem.code[0] == 5) {
+				errorOpen.push(elem.url);
+			}
 
-		if (elem.isRedirect) {
-			redirected.push(`${elem.fullURL} -> ${elem.finalURL}`);
-		}
+			if (elem.isRedirect) {
+				redirected.push(`${elem.fullURL} -> ${elem.finalURL}`);
+			}
 
-		if (!elem.sitemap) {
-			sitemap.push(elem.url + "/robots.txt");
-		}
+			if (!elem.sitemap) {
+				sitemap.push(elem.url + "/robots.txt");
+			}
 
-		if (!elem.host) {
-			host.push(elem.url + "/robots.txt");
-		}
+			if (!elem.host) {
+				host.push(elem.url + "/robots.txt");
+			}
 
-		if (!elem.isSitemapExist) {
-			sitemapError.push(elem.url);
-		}
+			if (!elem.isSitemapExist) {
+				sitemapError.push(elem.url);
+			}
+
+			if (elem.notFound) {
+				notFound.push(elem.url);
+			}
+		} catch {}
 	}
+
+	blocked.push(list[0]);
+	errorOpen.push(list[0]);
 
 	if (blocked.length) {
 		message += `Заблокированные домены:\n${blocked.join("\n")}`;
@@ -201,12 +210,32 @@ async function main() {
 		)}`;
 	}
 
+	if (notFound.length) {
+		message += `\nСтраницы 404:\n${notFound.join("\n")}`;
+	}
+
 	message = message.replace("Начало проверки сайтов", "Проверка завершена");
 
-	telegram.sendMessage(message);
-}
+	const problematicDomains = [];
 
-// main();
+	blocked.forEach((domain) => {
+		if (!problematicDomains.includes(domain)) {
+			problematicDomains.push(domain);
+		}
+	});
+
+	errorOpen.forEach((domain) => {
+		if (!problematicDomains.includes(domain)) {
+			problematicDomains.push(domain);
+		}
+	});
+
+	if (problematicDomains.length) {
+		await checkerWrapper(problematicDomains, message);
+	} else {
+		return telegram.sendMessage(message);
+	}
+}
 
 async function checkerWrapper(domains, message) {
 	const captcha = new Captcha(key, "ImageToTextTask");
@@ -223,7 +252,7 @@ async function checkerWrapper(domains, message) {
 
 	//rkn logic
 	const browser = await puppeteer.launch({
-		headless: true,
+		headless: false,
 		executablePath: executablePath(),
 		ignoreDefaultArgs: ["--enable-automation"],
 	});
@@ -239,6 +268,8 @@ async function checkerWrapper(domains, message) {
 	await rkn.loadPage(rknSite);
 
 	let domainCounter = 0;
+
+	let rknBlocked = [];
 
 	const domainsList = domains;
 
@@ -257,24 +288,41 @@ async function checkerWrapper(domains, message) {
 		}
 
 		if (tryCounter < 5) {
-			await rkn.handleResult(checkResult, domain);
+			const handledResult = await rkn.handleResult(checkResult, domain);
+			if (handledResult) {
+				rknBlocked.push(handledResult);
+			}
 		} else {
 			console.log("Превышено количество попыток для домена");
 		}
 		domainCounter++;
-		//Ошибка! Неверно указан защитный код
 	}
 
-	console.log("Проверка завершена");
+	if (rknBlocked.length) {
+		message += "\nБлок РКН:";
+		rknBlocked.forEach((item) => {
+			message += `\n${item.domain}: ${item.text}`;
+		});
+		await resultBot.sendMessage(message);
+	} else {
+		await resultBot.sendMessage(message);
+	}
 
 	await browser.close();
 
 	async function check(domain) {
 		const captchaImage = await page.waitForSelector("#captcha_image");
 
-		const screenshotBuffer = await captchaImage.screenshot({
-			encoding: "base64",
-		});
+		const screenshotBuffer = await captchaImage
+			.screenshot({
+				encoding: "base64",
+			})
+			.catch((err) => {
+				console.log(err);
+				return false;
+			});
+
+		if (!screenshotBuffer) return false;
 
 		const solution = await rkn.resolveCaptcha(screenshotBuffer);
 
@@ -284,4 +332,4 @@ async function checkerWrapper(domains, message) {
 	}
 }
 
-checkerWrapper();
+main();

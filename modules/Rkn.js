@@ -34,7 +34,9 @@ class Rkn {
 				return result;
 			});
 
-			await this.resultBot.sendMessage(`${domain} Результат: ${text}`);
+			return { domain, text };
+
+			// await this.resultBot.sendMessage(`${domain} Результат: ${text}`);
 			// case false:
 			// 	console.log(`${domain} Результат: не удалось решить капчу`);
 
@@ -44,9 +46,10 @@ class Rkn {
 			// 	break;
 		} else {
 			console.log("домен не найден в реестре");
-			await this.logsBot.sendMessage(
-				`${domain} Результат: домен не найден в реестре\n`,
-			);
+			return false;
+			// await this.logsBot.sendMessage(
+			// 	`${domain} Результат: домен не найден в реестре\n`,
+			// );
 		}
 	}
 
