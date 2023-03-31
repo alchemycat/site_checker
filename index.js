@@ -88,7 +88,7 @@ async function main() {
 
 	list = withoutDublicates;
 
-	let message = `Начало проверки сайтов\nКоличество сайтов: ${sitesCount}\n`;
+	let message = `Начало проверки сайтов\n<b>Общее кол-во сайтов:</b> ${sitesCount}\n`;
 
 	if (totalDublicates) {
 		message += `Одинаковых сайтов: ${totalDublicates}\n`;
@@ -109,8 +109,11 @@ async function main() {
 		const checker = new Check();
 
 		const checkURLResult = await checker.checkURL(url);
-		
-		const checkRobotsResult = await checker.checkRobots(url, checkURLResult.httpError);
+
+		const checkRobotsResult = await checker.checkRobots(
+			url,
+			checkURLResult.httpError,
+		);
 
 		const sitemapURL = checkRobotsResult?.sitemapURL;
 
@@ -160,15 +163,30 @@ async function main() {
 			redirected.push(`${elem.fullURL} -> ${elem.finalURL}`);
 		}
 
-		if (!elem.sitemap && !redirected.includes(elem.url) && !errorOpen.includes(elem.url) && !blocked.includes(elem.url)) {
+		if (
+			!elem.sitemap &&
+			!redirected.includes(elem.url) &&
+			!errorOpen.includes(elem.url) &&
+			!blocked.includes(elem.url)
+		) {
 			sitemap.push(elem.url + "/robots.txt");
 		}
 
-		if (!elem.host && !redirected.includes(elem.url) && !errorOpen.includes(elem.url) && !blocked.includes(elem.url)) {
+		if (
+			!elem.host &&
+			!redirected.includes(elem.url) &&
+			!errorOpen.includes(elem.url) &&
+			!blocked.includes(elem.url)
+		) {
 			host.push(elem.url + "/robots.txt");
 		}
 
-		if (!elem.isSitemapExist && !redirected.includes(elem.url) && !errorOpen.includes(elem.url) && !blocked.includes(elem.url)) {
+		if (
+			!elem.isSitemapExist &&
+			!redirected.includes(elem.url) &&
+			!errorOpen.includes(elem.url) &&
+			!blocked.includes(elem.url)
+		) {
 			sitemapError.push(elem.url);
 		}
 
@@ -199,43 +217,43 @@ async function main() {
 
 	message += `Заблокированные: ${blocked.length}\nНе открываются: ${
 		errorOpen.length + notFound.length
-	}\nОшибка http: ${httpError.length}\nРедиректят: ${
+	}\nОшибка HTTP: ${httpError.length}\nРедиректят: ${
 		redirected.length
 	}\nRobots: ${robots.length}\nSitemap: ${sitemapError.length}\n`;
 
 	if (blocked.length) {
-		message += `Заблокированные домены:\n${blocked.join("\n")}`;
+		message += `<b>Заблокированные домены:</b>\n${blocked.join("\n")}\n`;
 	}
 
 	if (errorOpen.length) {
-		message += `\nНе открываются:\n${errorOpen.join("\n")}`;
+		message += `\n<b>Не открываются:</b>\n${errorOpen.join("\n")}\n`;
 	}
 
 	if (httpError.length) {
-		message += `\nОшибка http:\n${httpError.join("\n")}`;
+		message += `\n<b>Ошибка HTTP:</b>\n${httpError.join("\n")}\n`;
 	}
 
 	if (redirected.length) {
-		message += `\nРедиректят:\n${redirected.join("\n")}`;
+		message += `\n<b>Редиректят:</b>\n${redirected.join("\n")}\n`;
 	}
 
 	if (sitemap.length) {
-		message += `\nОшибка robots.txt, Sitemap:\n${sitemap.join("\n")}`;
+		message += `\n<b>Ошибка robots.txt, Sitemap:</b>\n${sitemap.join("\n")}\n`;
 	}
 
 	if (host.length) {
-		message += `\nОшибка robots.txt, Host:\n${host.join("\n")}`;
+		message += `\n<b>Ошибка robots.txt, Host:</b>\n${host.join("\n")}\n`;
 	}
 
 	if (sitemap.length) {
-		message += `\nSitemap не найден:\n${sitemapError.join("\n")}`;
+		message += `\n<b>Sitemap не найден (или ошибка):</b>\n${sitemapError.join("\n")}\n`;
 	}
 
 	if (notFound.length) {
-		message += `\nСтраницы 404:\n${notFound.join("\n")}`;
+		message += `\n<b>Страницы 404:</b>\n${notFound.join("\n")}\n`;
 	}
 
-	message = message.replace("Начало проверки сайтов", "Проверка завершена");
+	message = message.replace("Начало проверки сайтов", "📌Проверка завершена");
 
 	const problematicDomains = [];
 

@@ -46,7 +46,7 @@ class Check {
 
 				result.code = response.request.res.statusCode;
 
-				finalURL === `https://${url}/`
+				finalURL.includes("https")
 					? (result.httpError = false)
 					: (result.httpError = true);
 

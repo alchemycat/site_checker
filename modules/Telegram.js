@@ -15,6 +15,7 @@ class Telegram {
             {
                 chat_id: this.chatID,
                 text: message,
+                parse_mode: "HTML"
             },
         );
     }
