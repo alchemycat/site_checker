@@ -104,15 +104,15 @@ async function main() {
 	for (let i = 0; i < list.length; i++) {
 		const fullURL = list[i];
 		url = list[i];
-		url = url.replace(/(https|http|:\/\/|www\.|\/$)/gm, "");
+		url = url.replace(/(https|http|:\/\/|\/$)/gm, "");
 
 		const checker = new Check();
 
 		const checkURLResult = await checker.checkURL(url);
+		
+		const checkRobotsResult = await checker.checkRobots(url, checkURLResult.httpError);
 
-		const checkRobotsResult = await checker.checkRobots(url);
-
-		const { sitemapURL } = checkRobotsResult;
+		const sitemapURL = checkRobotsResult?.sitemapURL;
 
 		let isSitemapExist = false;
 
@@ -131,8 +131,6 @@ async function main() {
 		sitesResult.push(resultObject);
 	}
 
-	// console.log(sitesResult);
-
 	const blocked = [];
 	const errorOpen = [];
 	const redirected = [];
@@ -140,74 +138,97 @@ async function main() {
 	const host = [];
 	const sitemapError = [];
 	const notFound = [];
+	const httpError = [];
+
+	const robots = [];
 
 	sitesResult.find(findSite);
 
 	function findSite(elem) {
-		try {
-			elem.code = elem.code.toString();
+		elem.code = elem.code?.toString();
 
-			if (elem.isBlocked) {
-				blocked.push(elem.url);
-			}
+		if (elem.isBlocked) {
+			blocked.push(elem.url);
+		}
 
-			if (elem.code[0] == 4 || elem.code[0] == 5) {
-				errorOpen.push(elem.url);
-			}
+		// if (elem.code[0] == 4 || elem.code[0] == 5) {
+		if (elem.notOpen) {
+			errorOpen.push(elem.url);
+		}
 
-			if (elem.isRedirect) {
-				redirected.push(`${elem.fullURL} -> ${elem.finalURL}`);
-			}
+		if (elem.isRedirect) {
+			redirected.push(`${elem.fullURL} -> ${elem.finalURL}`);
+		}
 
-			if (!elem.sitemap) {
-				sitemap.push(elem.url + "/robots.txt");
-			}
+		if (!elem.sitemap && !redirected.includes(elem.url) && !errorOpen.includes(elem.url) && !blocked.includes(elem.url)) {
+			sitemap.push(elem.url + "/robots.txt");
+		}
 
-			if (!elem.host) {
-				host.push(elem.url + "/robots.txt");
-			}
+		if (!elem.host && !redirected.includes(elem.url) && !errorOpen.includes(elem.url) && !blocked.includes(elem.url)) {
+			host.push(elem.url + "/robots.txt");
+		}
 
-			if (!elem.isSitemapExist) {
-				sitemapError.push(elem.url);
-			}
+		if (!elem.isSitemapExist && !redirected.includes(elem.url) && !errorOpen.includes(elem.url) && !blocked.includes(elem.url)) {
+			sitemapError.push(elem.url);
+		}
 
-			if (elem.notFound) {
-				notFound.push(elem.url);
-			}
-		} catch {}
+		if (elem.notFound && elem.title.includes("404")) {
+			notFound.push(elem.url);
+		}
+
+		if (elem.httpError) {
+			httpError.push(elem.url);
+		}
 	}
 
-	blocked.push(list[0]);
-	errorOpen.push(list[0]);
+	if (host.length) {
+		host.forEach((item) => {
+			if (!robots.includes(item)) {
+				robots.push(item);
+			}
+		});
+	}
+
+	if (sitemap.length) {
+		sitemap.forEach((item) => {
+			if (!robots.includes(item)) {
+				robots.push(item);
+			}
+		});
+	}
+
+	message += `Заблокированные: ${blocked.length}\nНе открываются: ${
+		errorOpen.length + notFound.length
+	}\nОшибка http: ${httpError.length}\nРедиректят: ${
+		redirected.length
+	}\nRobots: ${robots.length}\nSitemap: ${sitemapError.length}\n`;
 
 	if (blocked.length) {
 		message += `Заблокированные домены:\n${blocked.join("\n")}`;
 	}
 
 	if (errorOpen.length) {
-		message += `\nДомены которые не открываются:\n${errorOpen.join("\n")}`;
+		message += `\nНе открываются:\n${errorOpen.join("\n")}`;
+	}
+
+	if (httpError.length) {
+		message += `\nОшибка http:\n${httpError.join("\n")}`;
 	}
 
 	if (redirected.length) {
-		message += `\nСайты которые редиректят на другие домены:\n${redirected.join(
-			"\n",
-		)}`;
+		message += `\nРедиректят:\n${redirected.join("\n")}`;
 	}
 
 	if (sitemap.length) {
-		message += `\nОшибка в файле robots.txt строка с Sitemap:\n${sitemap.join(
-			"\n",
-		)}`;
+		message += `\nОшибка robots.txt, Sitemap:\n${sitemap.join("\n")}`;
 	}
 
 	if (host.length) {
-		message += `\nОшибка в файле robots.txt строка с Host:\n${host.join("\n")}`;
+		message += `\nОшибка robots.txt, Host:\n${host.join("\n")}`;
 	}
 
 	if (sitemap.length) {
-		message += `\nФайл Sitemap не найден или не открывается для доменов:\n${sitemapError.join(
-			"\n",
-		)}`;
+		message += `\nSitemap не найден:\n${sitemapError.join("\n")}`;
 	}
 
 	if (notFound.length) {
@@ -230,11 +251,12 @@ async function main() {
 		}
 	});
 
-	if (problematicDomains.length) {
-		await checkerWrapper(problematicDomains, message);
-	} else {
-		return telegram.sendMessage(message);
-	}
+	console.log(message);
+	// if (problematicDomains.length) {
+	// await checkerWrapper(problematicDomains, message);
+	// } else {
+	return await telegram.sendMessage(message);
+	// }
 }
 
 async function checkerWrapper(domains, message) {

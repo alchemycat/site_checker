@@ -1,6 +1,12 @@
 const axios = require("axios");
+const punycode = require("punycode");
 
 class Check {
+	checkCyrillic(url) {
+		const cyrillicPattern = /[а-яА-ЯЁё]/;
+		return cyrillicPattern.test(url);
+	}
+
 	async checkURL(url) {
 		const result = {
 			finalURL: null,
@@ -10,14 +16,34 @@ class Check {
 			title: null,
 			httpError: null,
 			notFound: null,
+			notOpen: null,
 		};
+
+		console.log("url:", url);
+
+		let isCyr = false;
+
+		isCyr = this.checkCyrillic(url);
 
 		await axios
 			.get(`http://${url}`)
 			.then((response) => {
 				const html = response.data;
 
-				const finalURL = response.request.res.responseUrl;
+				let finalURL = response.request.res.responseUrl;
+
+				if (isCyr) {
+					const punyUrl = punycode.toASCII(url);
+
+					const replaced = finalURL.replace(punyUrl, "{pholder}");
+
+					if (replaced.includes("{pholder}")) {
+						const decodedUrl = punycode.toUnicode(punyUrl);
+
+						finalURL = replaced.replace("{pholder}", decodedUrl);
+					}
+				}
+
 				result.code = response.request.res.statusCode;
 
 				finalURL === `https://${url}/`
@@ -39,11 +65,15 @@ class Check {
 				result.finalURL = finalURL;
 			})
 			.catch((error) => {
-				if (error.response.status === 404) {
+				// console.log(error);
+				if (error.response?.status === 404) {
 					result.notFound = true;
+				} else {
+					result.notOpen = true;
 				}
 			});
 
+		console.log(result);
 		return result;
 	}
 
@@ -57,15 +87,19 @@ class Check {
 		return true;
 	}
 
-	async checkRobots(url) {
+	async checkRobots(url, httpError) {
+		let protocol = httpError ? "http" : "https";
 		return await axios
-			.get(`https://${url}/robots.txt`)
+			.get(`${protocol}://${url}/robots.txt`)
 			.then((response) => {
+				console.log(response);
 				const result = {
 					sitemap: null,
 					host: null,
 					sitemapURL: null,
 				};
+
+				const punyUrl = punycode.toASCII(url);
 
 				let host = null,
 					sitemap = null;
@@ -77,8 +111,15 @@ class Check {
 					? (sitemap = response.data.match(/(?<=Sitemap\:\s).*(?=(\n|))/gm)[0])
 					: (sitemap = false);
 
-				if (host && host === `https://${url}`) result.host = true;
-				if (sitemap && sitemap.includes(`https://${url}`)) {
+				if (
+					(host && host === `https://${url}`) ||
+					host === `https://${punyUrl}`
+				)
+					result.host = true;
+				if (
+					(sitemap && sitemap.includes(`https://${url}`)) ||
+					sitemap.includes(`https://${punyUrl}`)
+				) {
 					result.sitemap = true;
 					result.sitemapURL = sitemap;
 				}

@@ -35,21 +35,9 @@ class Rkn {
 			});
 
 			return { domain, text };
-
-			// await this.resultBot.sendMessage(`${domain} Результат: ${text}`);
-			// case false:
-			// 	console.log(`${domain} Результат: не удалось решить капчу`);
-
-			// 	await this.logsBot.sendMessage(
-			// 		`🕒За 5 попыток не удалось проверить домен: ${domain}, нужно проверить в ручную.`,
-			// 	);
-			// 	break;
 		} else {
 			console.log("домен не найден в реестре");
 			return false;
-			// await this.logsBot.sendMessage(
-			// 	`${domain} Результат: домен не найден в реестре\n`,
-			// );
 		}
 	}
 
