@@ -1,10 +1,8 @@
 class Rkn {
-	constructor(page, browser, captcha, resultBot, logsBot) {
+	constructor(page, browser, captcha) {
 		this.page = page;
 		this.browser = browser;
 		this.captcha = captcha;
-		this.resultBot = resultBot;
-		this.logsBot = logsBot;
 	}
 
 	async handleResult(result, domain) {
@@ -93,35 +91,39 @@ class Rkn {
 	}
 
 	async checkDomain(domain, solution) {
-		await this.page.evaluate(() => {
-			document.querySelector(".inputMsg").value = "";
-		});
+		try {
+			await this.page.evaluate(() => {
+				document.querySelector(".inputMsg").value = "";
+			});
 
-		await this.page.waitForTimeout(500);
+			await this.page.waitForTimeout(500);
 
-		await this.page.type(".inputMsg", domain);
+			await this.page.type(".inputMsg", domain);
 
-		await this.page.waitForTimeout(500);
+			await this.page.waitForTimeout(500);
 
-		await this.page.type("#captcha", solution);
+			await this.page.type("#captcha", solution);
 
-		await this.page.waitForTimeout(500);
+			await this.page.waitForTimeout(500);
 
-		await this.page.click("#send_but2");
+			await this.page.click("#send_but2");
 
-		await this.page.waitForTimeout(2000);
+			await this.page.waitForTimeout(2000);
 
-		await this.page.waitForSelector(".messageFlash");
+			await this.page.waitForSelector(".messageFlash");
 
-		const resultMessage = await this.page.evaluate(() => {
-			try {
-				return document.querySelector(".messageFlash").textContent;
-			} catch {
-				return false;
-			}
-		});
+			const resultMessage = await this.page.evaluate(() => {
+				try {
+					return document.querySelector(".messageFlash").textContent;
+				} catch {
+					return false;
+				}
+			});
 
-		return resultMessage;
+			return resultMessage;
+		} catch {
+			return false;
+		}
 	}
 }
 

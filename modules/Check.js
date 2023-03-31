@@ -19,8 +19,6 @@ class Check {
 			notOpen: null,
 		};
 
-		console.log("url:", url);
-
 		let isCyr = false;
 
 		isCyr = this.checkCyrillic(url);
@@ -73,7 +71,6 @@ class Check {
 				}
 			});
 
-		console.log(result);
 		return result;
 	}
 
@@ -92,7 +89,6 @@ class Check {
 		return await axios
 			.get(`${protocol}://${url}/robots.txt`)
 			.then((response) => {
-				console.log(response);
 				const result = {
 					sitemap: null,
 					host: null,
@@ -112,10 +108,12 @@ class Check {
 					: (sitemap = false);
 
 				if (
-					(host && host === `https://${url}`) ||
+					(host && host.includes(`https://${url}`)) ||
 					host === `https://${punyUrl}`
-				)
+				) {
 					result.host = true;
+				}
+
 				if (
 					(sitemap && sitemap.includes(`https://${url}`)) ||
 					sitemap.includes(`https://${punyUrl}`)

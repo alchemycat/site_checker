@@ -16,13 +16,14 @@ const { Rkn } = require("./modules/Rkn.js");
 const { Captcha } = require("./modules/Captcha.js");
 
 // Константы
-const token = process.env.MAIN_TOKEN;
-const chatID = process.env.MAIN_CHAT_ID;
+const token = process.env.TOKEN;
+const chatID = process.env.CHAT_ID;
 const scriptURL = process.env.SCRIPT;
 const key = process.env.KEY;
 
+const telegram = new Telegram(token, chatID);
+
 async function main() {
-	const telegram = new Telegram(token, chatID);
 	const captcha = new Captcha(key);
 
 	const balance = await captcha.getBalance();
@@ -137,6 +138,7 @@ async function main() {
 	const blocked = [];
 	const errorOpen = [];
 	const redirected = [];
+	const redirectedDomains = [];
 	const sitemap = [];
 	const host = [];
 	const sitemapError = [];
@@ -150,52 +152,54 @@ async function main() {
 	function findSite(elem) {
 		elem.code = elem.code?.toString();
 
+		blocked.push(elem.url);
+
 		if (elem.isBlocked) {
 			blocked.push(elem.url);
 		}
 
-		// if (elem.code[0] == 4 || elem.code[0] == 5) {
 		if (elem.notOpen) {
 			errorOpen.push(elem.url);
 		}
 
+		if (elem.notFound || elem.title?.includes("404")) {
+			notFound.push(elem.url);
+		}
+
+		if (elem.httpError) {
+			httpError.push(elem.url);
+		}
+
 		if (elem.isRedirect) {
 			redirected.push(`${elem.fullURL} -> ${elem.finalURL}`);
+			redirectedDomains.push(elem.url);
 		}
 
 		if (
 			!elem.sitemap &&
-			!redirected.includes(elem.url) &&
+			!redirectedDomains.includes(elem.url) &&
 			!errorOpen.includes(elem.url) &&
-			!blocked.includes(elem.url)
+			!notFound.includes(elem.url)
 		) {
 			sitemap.push(elem.url + "/robots.txt");
 		}
 
 		if (
 			!elem.host &&
-			!redirected.includes(elem.url) &&
+			!redirectedDomains.includes(elem.url) &&
 			!errorOpen.includes(elem.url) &&
-			!blocked.includes(elem.url)
+			!notFound.includes(elem.url)
 		) {
 			host.push(elem.url + "/robots.txt");
 		}
 
 		if (
 			!elem.isSitemapExist &&
-			!redirected.includes(elem.url) &&
+			!redirectedDomains.includes(elem.url) &&
 			!errorOpen.includes(elem.url) &&
-			!blocked.includes(elem.url)
+			!notFound.includes(elem.url)
 		) {
 			sitemapError.push(elem.url);
-		}
-
-		if (elem.notFound && elem.title.includes("404")) {
-			notFound.push(elem.url);
-		}
-
-		if (elem.httpError) {
-			httpError.push(elem.url);
 		}
 	}
 
@@ -215,18 +219,18 @@ async function main() {
 		});
 	}
 
-	message += `Заблокированные: ${blocked.length}\nНе открываются: ${
-		errorOpen.length + notFound.length
-	}\nОшибка HTTP: ${httpError.length}\nРедиректят: ${
-		redirected.length
-	}\nRobots: ${robots.length}\nSitemap: ${sitemapError.length}\n`;
+	message += `Заблокированные: ${blocked.length}\nЗаблокированные РКН: 0\nНе открываются: ${errorOpen.length}\nОшибка 404: ${notFound.length}\nОшибка HTTP: ${httpError.length}\nРедиректят: ${redirected.length}\nRobots: ${robots.length}\nSitemap: ${sitemapError.length}\n`;
 
 	if (blocked.length) {
-		message += `<b>Заблокированные домены:</b>\n${blocked.join("\n")}\n`;
+		message += `\n<b>Заблокированные домены:</b>\n${blocked.join("\n")}\n`;
 	}
 
 	if (errorOpen.length) {
 		message += `\n<b>Не открываются:</b>\n${errorOpen.join("\n")}\n`;
+	}
+
+	if (notFound.length) {
+		message += `\n<b>Страницы 404:</b>\n${notFound.join("\n")}\n`;
 	}
 
 	if (httpError.length) {
@@ -246,11 +250,9 @@ async function main() {
 	}
 
 	if (sitemap.length) {
-		message += `\n<b>Sitemap не найден (или ошибка):</b>\n${sitemapError.join("\n")}\n`;
-	}
-
-	if (notFound.length) {
-		message += `\n<b>Страницы 404:</b>\n${notFound.join("\n")}\n`;
+		message += `\n<b>Sitemap не найден (или ошибка):</b>\n${sitemapError.join(
+			"\n",
+		)}\n`;
 	}
 
 	message = message.replace("Начало проверки сайтов", "📌Проверка завершена");
@@ -269,26 +271,15 @@ async function main() {
 		}
 	});
 
-	console.log(message);
-	// if (problematicDomains.length) {
-	// await checkerWrapper(problematicDomains, message);
-	// } else {
-	return await telegram.sendMessage(message);
-	// }
+	if (problematicDomains.length) {
+		await checkerWrapper(problematicDomains, message);
+	} else {
+		return await telegram.sendMessage(message);
+	}
 }
 
 async function checkerWrapper(domains, message) {
 	const captcha = new Captcha(key, "ImageToTextTask");
-
-	const resultBot = new Telegram(
-		process.env.MAIN_TOKEN,
-		process.env.MAIN_CHAT_ID,
-	);
-
-	const logsBot = new Telegram(
-		process.env.LOGS_TOKEN,
-		process.env.LOGS_CHAT_ID,
-	);
 
 	//rkn logic
 	const browser = await puppeteer.launch({
@@ -303,9 +294,15 @@ async function checkerWrapper(domains, message) {
 
 	page.setDefaultNavigationTimeout(60000);
 
-	const rkn = new Rkn(page, browser, captcha, resultBot, logsBot);
+	const rkn = new Rkn(page, browser, captcha, telegram);
 
-	await rkn.loadPage(rknSite);
+	const isLoad = await rkn.loadPage(rknSite).then(() => true).catch(() => false);
+	
+	if (!isLoad) {
+		console.log("Не удалось загрузить сайт RKN");
+		await browser.close();
+		return;
+	}
 
 	let domainCounter = 0;
 
@@ -339,13 +336,19 @@ async function checkerWrapper(domains, message) {
 	}
 
 	if (rknBlocked.length) {
-		message += "\nБлок РКН:";
+		message = message.replace(
+			"Заблокированные РКН: 0",
+			`Заблокированные РКН: ${rknBlocked.length}`,
+		);
+
+		message += "\n<b>Блок РКН:</b>";
 		rknBlocked.forEach((item) => {
 			message += `\n${item.domain}: ${item.text}`;
 		});
-		await resultBot.sendMessage(message);
+
+		await telegram.sendMessage(message);
 	} else {
-		await resultBot.sendMessage(message);
+		await telegram.sendMessage(message);
 	}
 
 	await browser.close();
