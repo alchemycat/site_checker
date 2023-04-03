@@ -1,7 +1,7 @@
-const axios = require("axios");
-const crypto = require("crypto");
-const chalk = require("chalk");
-const { sleep } = require("./sleep.js");
+import axios from "axios";
+import crypto from "crypto";
+import chalk from "chalk";
+import sleep from "./sleep.js";
 
 class Telegram {
 	constructor(token, chatID) {
@@ -56,4 +56,4 @@ class Telegram {
     }
 }
 
-exports.Telegram = Telegram;
+export default Telegram;

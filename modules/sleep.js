@@ -4,4 +4,4 @@ async function sleep(ms) {
 	});
 }
 
-exports.sleep = sleep;
+export default sleep;

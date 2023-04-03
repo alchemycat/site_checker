@@ -1,5 +1,5 @@
-const axios = require("axios");
-const punycode = require("punycode");
+import axios from "axios";
+import punycode from "punycode";
 
 class Check {
 	checkCyrillic(url) {
@@ -128,4 +128,4 @@ class Check {
 	}
 }
 
-exports.Check = Check;
+export default Check;

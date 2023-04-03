@@ -7,7 +7,7 @@ class Rkn {
 
 	async handleResult(result, domain) {
 		if (result.includes("Искомый ресурс внесен в реестр по основаниям")) {
-			console.log("домен найден в реестре");
+			// console.log("домен найден в реестре");
 			await this.page.waitForSelector(".line");
 			const text = await this.page.evaluate(() => {
 				const lines = document.querySelectorAll(".line");
@@ -34,7 +34,7 @@ class Rkn {
 
 			return { domain, text };
 		} else {
-			console.log("домен не найден в реестре");
+			// console.log("домен не найден в реестре");
 			return false;
 		}
 	}
@@ -127,4 +127,4 @@ class Rkn {
 	}
 }
 
-exports.Rkn = Rkn;
+export default Rkn;

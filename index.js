@@ -1,25 +1,28 @@
-const { executablePath } = require("puppeteer");
-const puppeteer = require("puppeteer-extra");
-const schedule = require("node-schedule");
-const fs = require("fs");
-const path = require("path");
-const input = require("input");
+import { executablePath } from "puppeteer";
+import puppeteer from "puppeteer-extra";
+import schedule from "node-schedule";
+import fs from "fs";
+import path from "path";
+import input from "input";
+import axios from "axios";
+import * as dotenv from 'dotenv';
 
-const axios = require("axios");
+dotenv.config();
 
-require("dotenv").config();
-
-const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
 puppeteer.use(StealthPlugin());
 
 // Мои модули
-const { Telegram } = require("./modules/Telegram");
-const { Check } = require("./modules/Check.js");
-const { Rkn } = require("./modules/Rkn.js");
-const { Captcha } = require("./modules/Captcha.js");
+import Telegram from "./modules/Telegram.js";
+import Check from "./modules/Check.js";
+import Rkn from "./modules/Rkn.js";
+import Captcha from "./modules/Captcha.js";
+
+const __dirname = path.resolve();
 
 async function init() {
-	const configPath = path.resolve(__dirname, ".env");
+
+	const configPath = path.resolve(__dirname, "config.json");
 
 	const isExist = fs.existsSync(configPath);
 	
@@ -33,32 +36,44 @@ async function init() {
 		const envTimeBetween = await input.text("Введите часы запуска скрипта, пример: 10-23");
 		const envTimeoutInMin = await input.text("Введите время ожидания в минутах, пример: 5");
 		
-		fs.writeFileSync(configPath, `SCRIPT="${envScript}"\nKEY="${envKey}"\nTOKEN="${envToken}"\nCHAT_ID="${envChatID}"\nSCHEDULE="${envSchedule}"\nTIME_BETWEEN="${envTimeBetween}"\nTIMEOUT_IN_MIN="${envTimeoutInMin}"`);
+		const config = {};
+		config.script = envScript;
+		config.key = envKey;
+		config.token = envToken;
+		config.chatID = envChatID;
+		config.schedule = envSchedule;
+		config.timeBetween = envTimeBetween;
+		config.timeoutInMin = envTimeoutInMin;
+
+		fs.writeFileSync(configPath, JSON.stringify(config));
 
 		return console.log("Файл .env создан, запустите скрипт еще раз с помощью команды npm run start или node index.js");
 	}
-	
+
+	let configData = fs.readFileSync(configPath, "utf8");
+	configData = JSON.parse(configData);
+
 	// Константы
-	const token = process.env.TOKEN;
-	const chatID = process.env.CHAT_ID;
-	const scriptURL = process.env.SCRIPT;
-	const key = process.env.KEY;
+	const token = configData.token;
+	const chatID = configData.chatID;
+	const scriptURL = configData.script;
+	const key = configData.key;
 	
-	const useSchedule = process.env.SCHEDULE; // использовать планироващик = true не использовать = false
+	const useSchedule = configData.schedule; // использовать планироващик = true не использовать = false
 	
 	let timeBetween = null;
 	let timeoutInMin = null;
 	let isWork = null;
 	
 	if (useSchedule != "Нет") {
-		timeBetween = process.env.TIME_BETWEEN;
-		timeoutInMin = process.env.TIMEOUT_IN_MIN;
+		timeBetween = configData.timeBetween;
+		timeoutInMin = configData.timeoutInMin;
 		if (!timeBetween || !timeoutInMin)
 			return console.log("Не указано время запуска скрипта и время ожидания");
 	}
 	
 	const telegram = new Telegram(token, chatID);
-	
+
 	async function main(job = null) {
 		if (isWork) {
 			return;
@@ -148,7 +163,7 @@ async function init() {
 	
 		for (let i = 0; i < list.length; i++) {
 			const fullURL = list[i];
-			url = list[i];
+			let url = list[i];
 			url = url.replace(/(https|http|:\/\/|\/$)/gm, "");
 	
 			const checker = new Check();
@@ -305,7 +320,7 @@ async function init() {
 			if (useSchedule == "Да") {
 				// await sleep(Math.floor(minInMs / 2));
 				job.cancel(true);
-				console.log("Следующий запуск: ", new Date(job.nextInvocation()).toLocaleString());
+				console.log("Следующий запуск ", new Date(job.nextInvocation()).toLocaleString("ru-RU", { hour12: false }));
 			}
 	
 			isWork = false;
@@ -361,7 +376,7 @@ async function init() {
 				(checkResult.includes("Неверно указан защитный код") && tryCounter < 6)
 			) {
 				tryCounter++;
-				console.log(`Для домена: ${domain} Попытка: ${tryCounter}`);
+				// console.log(`Для домена: ${domain} Попытка: ${tryCounter}`);
 				checkResult = await check(domain);
 			}
 	
@@ -371,7 +386,7 @@ async function init() {
 					rknBlocked.push(handledResult);
 				}
 			} else {
-				console.log("Превышено количество попыток для домена");
+				// console.log("Превышено количество попыток для домена");
 			}
 			domainCounter++;
 		}
@@ -423,9 +438,10 @@ async function init() {
 				main(job);
 			},
 		);
-	
+		const nextInvoc = new Date(job.nextInvocation()).toLocaleString("ru-RU", { hour12: false });
+		await telegram.sendMessage(`Следующий запуск ${nextInvoc}`);
 		console.log(
-			`Следующий запуск в ${new Date(job.nextInvocation()).toLocaleString()}`,
+			`Следующий запуск в ${nextInvoc}`,
 		);
 	} else {
 		main();

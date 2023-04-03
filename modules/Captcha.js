@@ -1,4 +1,4 @@
-const axios = require("axios");
+import axios from "axios";
 
 class Captcha {
 	data = null;
@@ -50,4 +50,4 @@ class Captcha {
 	}
 }
 
-exports.Captcha = Captcha;
+export default Captcha;
