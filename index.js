@@ -5,6 +5,10 @@ import fs from "fs";
 import path from "path";
 import input from "input";
 import axios from "axios";
+import logUpdate from "log-update";
+import chalk from "chalk";
+import ora from "ora";
+
 import * as dotenv from "dotenv";
 
 dotenv.config();
@@ -26,7 +30,7 @@ async function start() {
 	const isExist = fs.existsSync(configPath);
 
 	if (!isExist) {
-		console.log("Файл с настройками не найден, создаем файл .env");
+		console.log("Файл с настройками не найден, создаем файл config.json");
 		const envScript = await input.text("Введите ссылку на скрипт");
 		const envKey = await input.text("Введите ключ капчи");
 		const envToken = await input.text("Введите токен бота");
@@ -65,12 +69,14 @@ async function start() {
 		const action = await input.select("Выберите действие:", [
 			"Запустить скрипт",
 			"Изменить настройки скрипта",
+			"Выход",
 		]);
+
 		if (action == "Запустить скрипт") {
 			let configData = fs.readFileSync(configPath, "utf8");
 			configData = JSON.parse(configData);
 			init(configData);
-		} else {
+		} else if (action == "Изменить настройки скрипта") {
 			async function changeConfig() {
 				const option = await input.select("Выбирите настройку для изменения:", [
 					"Ссылка на скрипт",
@@ -80,6 +86,7 @@ async function start() {
 					"Планировщик",
 					"Время запуска скрипта",
 					"Время таймаута",
+					"Вернуться в главное меню",
 				]);
 
 				let config;
@@ -147,12 +154,16 @@ async function start() {
 						"Введите время ожидания в минутах, пример: 5",
 						configPath,
 					);
+				} else if (option == "Вернуться в главное меню") {
+					return await start();
 				}
 
-				return await start();
+				return await changeConfig();
 			}
 
 			await changeConfig();
+		} else if (action == "Выход") {
+			return;
 		}
 	}
 }
@@ -188,7 +199,7 @@ async function init(configData) {
 			isWork = true;
 		}
 
-		console.log("Скрипт начал работу...");
+		const spinner = ora("Подготовка к проверке сайтов").start();
 
 		const captcha = new Captcha(key);
 
@@ -268,12 +279,18 @@ async function init(configData) {
 
 		let sitesResult = [];
 
+		spinner.succeed();
+
 		for (let i = 0; i < list.length; i++) {
 			const fullURL = list[i];
 			let url = list[i];
 			url = url.replace(/(https|http|:\/\/|\/$)/gm, "");
 
-			console.log(`Сайт: ${url} проверено: ${i + 1} из ${list.length}`);
+			logUpdate(
+				`Сайт: ${chalk.bold.magenta(url)} проверено: ${chalk.bold.green(
+					i + 1,
+				)} ${chalk.bold.green("из")} ${chalk.bold.green(list.length)}`,
+			);
 
 			const checker = new Check();
 
@@ -302,6 +319,8 @@ async function init(configData) {
 
 			sitesResult.push(resultObject);
 		}
+
+		logUpdate.done();
 
 		const blocked = [];
 		const errorOpen = [];
@@ -337,8 +356,15 @@ async function init(configData) {
 			}
 
 			if (elem.isRedirect) {
-				redirected.push(`${elem.fullURL} -> ${elem.finalURL}`);
-				redirectedDomains.push(elem.url);
+				if (elem.finalURL === "http://blackhole.beeline.ru/") {
+					blocked.push(elem.url);
+					if (httpError.includes(elem.url)) {
+						httpError.splice(httpError.indexOf(elem.url), 1);
+					}
+				} else {
+					redirected.push(`${elem.fullURL} -> ${elem.finalURL}`);
+					redirectedDomains.push(elem.url);
+				}
 			}
 
 			if (
@@ -429,7 +455,6 @@ async function init(configData) {
 			await checkerWrapper(errorOpen, message);
 
 			if (useSchedule == "Да") {
-				// await sleep(Math.floor(minInMs / 2));
 				job.cancel(true);
 				console.log(
 					"Следующий запуск ",
@@ -441,7 +466,9 @@ async function init(configData) {
 
 			isWork = false;
 		} else {
-			return await telegram.sendMessage(message);
+			const taskSendMessage = ora("Отправка результатов в Телеграм").start();
+			await telegram.sendMessage(message);
+			return taskSendMessage.succeed();
 		}
 	}
 
@@ -454,6 +481,8 @@ async function init(configData) {
 			executablePath: executablePath(),
 			ignoreDefaultArgs: ["--enable-automation"],
 		});
+
+		let oraMessage = ora("Загрузка сайта РКН").start();
 
 		const rknSite = "https://eais.rkn.gov.ru/";
 
@@ -469,12 +498,15 @@ async function init(configData) {
 			.catch(() => false);
 
 		if (!isLoad) {
+			oraMessage.fail();
 			console.log("Не удалось загрузить сайт RKN");
 			message += "\n<b>Не удалось загрузить сайт РКН</b>";
 			await telegram.sendMessage(message);
 			await browser.close();
 			return;
 		}
+
+		oraMessage.succeed();
 
 		let domainCounter = 0;
 
@@ -486,7 +518,13 @@ async function init(configData) {
 			const domain = domainsList[domainCounter];
 			let tryCounter = 0;
 			let checkResult = null;
-
+			logUpdate(
+				`Проверка РКН: ${chalk.bold.magenta(
+					domain,
+				)} проверено: ${chalk.bold.green(domainCounter + 1)} ${chalk.bold.green(
+					"из",
+				)} ${chalk.bold.green(domainsList.length)}`,
+			);
 			while (
 				!checkResult ||
 				(checkResult.includes("Неверно указан защитный код") && tryCounter < 6)
@@ -507,6 +545,10 @@ async function init(configData) {
 			domainCounter++;
 		}
 
+		logUpdate.done();
+
+		const oraResult = ora("Отправка результатов в Телеграм").start();
+
 		if (rknBlocked.length) {
 			message = message.replace(
 				"Заблокированные РКН: 0",
@@ -522,6 +564,8 @@ async function init(configData) {
 		} else {
 			await telegram.sendMessage(message);
 		}
+
+		oraResult.succeed();
 
 		await browser.close();
 

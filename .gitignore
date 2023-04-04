@@ -3,3 +3,4 @@
 .env
 list.js
 config.json
+cluster.js
