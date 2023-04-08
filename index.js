@@ -8,6 +8,7 @@ import axios from "axios";
 import logUpdate from "log-update";
 import chalk from "chalk";
 import ora from "ora";
+import cluster from "cluster";
 
 import * as dotenv from "dotenv";
 
@@ -23,8 +24,9 @@ import Rkn from "./modules/Rkn.js";
 import Captcha from "./modules/Captcha.js";
 
 const __dirname = path.resolve();
+const threadsLength = 2;
 
-async function start() {
+async function config() {
 	const configPath = path.resolve(__dirname, "config.json");
 
 	const isExist = fs.existsSync(configPath);
@@ -64,7 +66,7 @@ async function start() {
 		fs.writeFileSync(configPath, JSON.stringify(config));
 
 		console.log("Файл config.json создан.");
-		return await start();
+		return await config();
 	} else {
 		const action = await input.select("Выберите действие:", [
 			"Запустить скрипт",
@@ -155,7 +157,7 @@ async function start() {
 						configPath,
 					);
 				} else if (option == "Вернуться в главное меню") {
-					return await start();
+					return await config();
 				}
 
 				return await changeConfig();
@@ -168,7 +170,17 @@ async function start() {
 	}
 }
 
-start();
+if(cluster.isMaster) {
+	// config();
+} else {
+	// main();
+	process.on('message', function(message) {
+		if (message === 'run-task') {
+		  console.log('Выполняю задачу');
+		}
+	  });
+}
+
 
 async function init(configData) {
 	// Константы
@@ -530,7 +542,6 @@ async function init(configData) {
 				(checkResult.includes("Неверно указан защитный код") && tryCounter < 6)
 			) {
 				tryCounter++;
-				// console.log(`Для домена: ${domain} Попытка: ${tryCounter}`);
 				checkResult = await check(domain);
 			}
 
@@ -540,7 +551,6 @@ async function init(configData) {
 					rknBlocked.push(handledResult);
 				}
 			} else {
-				// console.log("Превышено количество попыток для домена");
 			}
 			domainCounter++;
 		}
@@ -598,9 +608,11 @@ async function init(configData) {
 				main(job);
 			},
 		);
+
 		const nextInvoc = new Date(job.nextInvocation()).toLocaleString("ru-RU", {
 			hour12: false,
 		});
+
 		await telegram.sendMessage(`Следующий запуск ${nextInvoc}`);
 		console.log(`Следующий запуск в ${nextInvoc}`);
 	} else {
