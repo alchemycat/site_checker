@@ -22,6 +22,7 @@ import Telegram from "./modules/Telegram.js";
 import Check from "./modules/Check.js";
 import Rkn from "./modules/Rkn.js";
 import Captcha from "./modules/Captcha.js";
+import sleep from "./modules/sleep.js";
 
 const __dirname = path.resolve();
 
@@ -499,19 +500,29 @@ async function init(configData) {
 
 		const rkn = new Rkn(page, browser, captcha, telegram);
 
-		const isLoad = await rkn
-			.loadPage(rknSite)
-			.then(() => true)
-			.catch(() => false);
+		let isLoad = null;
 
-		if (!isLoad) {
-			oraMessage.fail();
-			console.log("Не удалось загрузить сайт RKN");
-			message += "\n<b>Не удалось загрузить сайт РКН</b>";
-			await telegram.sendMessage(message);
-			await browser.close();
-			return;
+		while (!isLoad) {
+			isLoad = await rkn
+				.loadPage(rknSite)
+				.then(() => true)
+				.catch(() => false);
+
+			await telegram.sendMessage(
+				"Не удалось загрузить сайт RKN, ухожу в ожидание на 1 час",
+			);
+			await sleep(3600000); // жду один час до повторной проверки
 		}
+
+		// if (!isLoad) {
+		// 	oraMessage.fail();
+		// 	console.log("Не удалось загрузить сайт RKN");
+		// 	// message += "\n<b>Не удалось загрузить сайт РКН</b>";
+		// 	// await telegram.sendMessage(message);
+		// 	await telegram.sendMessage("Не удалось загрузить сайт RKN");
+		// 	// await browser.close();
+		// 	// return;
+		// }
 
 		oraMessage.succeed();
 
