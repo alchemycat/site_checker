@@ -383,7 +383,6 @@ async function init(configData) {
 
 			function findSite(elem) {
 				elem.code = elem.code?.toString();
-
 				if (elem.isBlocked) {
 					blocked.push(elem.url);
 				}
@@ -500,7 +499,7 @@ async function init(configData) {
 
 		const rkn = new Rkn(page, browser, captcha, telegram);
 
-		let isLoad = null;
+		let isLoad;
 
 		while (!isLoad) {
 			isLoad = await rkn
@@ -508,10 +507,17 @@ async function init(configData) {
 				.then(() => true)
 				.catch(() => false);
 
-			await telegram.sendMessage(
-				"Не удалось загрузить сайт RKN, ухожу в ожидание на 1 час",
-			);
-			await sleep(3600000); // жду один час до повторной проверки
+			if (!isLoad) {
+				await telegram.sendMessage(
+					"Не удалось загрузить сайт RKN, ухожу в ожидание на 30 секунд",
+				);
+
+				console.log(
+					"Не удалось загрузить сайт RKN, ухожу в ожидание на 30 секунд",
+				);
+
+				await sleep(30000); // жду один час до повторной проверки
+			}
 		}
 
 		// if (!isLoad) {
@@ -534,6 +540,9 @@ async function init(configData) {
 
 		while (domainCounter < domainsList.length) {
 			const domain = domainsList[domainCounter];
+
+			console.log(`Проверяю сайт на чекере РКН: ${chalk.bold.yellow(domain)}`);
+
 			let tryCounter = 0;
 			let checkResult = null;
 
@@ -576,22 +585,25 @@ async function init(configData) {
 		async function check(domain) {
 			const captchaImage = await page.waitForSelector("#captcha_image");
 
-			const screenshotBuffer = await captchaImage
-				.screenshot({
-					encoding: "base64",
-				})
-				.catch((err) => {
-					console.log(err);
-					return false;
-				});
+			if (captchaImage) {
+				const screenshotBuffer = await captchaImage
+					.screenshot({
+						encoding: "base64",
+					})
+					.catch((err) => {
+						return false;
+					});
 
-			if (!screenshotBuffer) return false;
+				if (!screenshotBuffer) return false;
 
-			const solution = await rkn.resolveCaptcha(screenshotBuffer);
+				const solution = await rkn.resolveCaptcha(screenshotBuffer);
 
-			const domainResult = await rkn.checkDomain(domain, solution);
+				const domainResult = await rkn.checkDomain(domain, solution);
 
-			return domainResult;
+				return domainResult;
+			} else {
+				return false;
+			}
 		}
 	}
 
